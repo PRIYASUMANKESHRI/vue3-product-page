@@ -2,28 +2,45 @@
   <div class="product-catalog">
     <div class="filter-section">
       <div class="search-container">
-        <input type="text" v-model="searchQuery" placeholder="Search products by name" />
-        <button @click="searchAgain">Reset</button>
+        <input 
+          type="text" 
+          v-model="searchQuery" 
+          placeholder="Search products by name"
+          class="search-input"
+        />
+        <button @click="searchAgain" class="search-button">
+          <span v-if="searchQuery">Clear</span>
+          <span v-else>Search</span>
+        </button>
       </div>
 
-      <select v-model="selectedCategory" class="category-select">
-        <option value="">All Categories</option>
-        <option v-for="category in categories" :key="category" :value="category">{{ category }}</option>
-      </select>
+      <div class="controls-container">
+        <button class="filter-button" @click="toggleFilters">
+          <span>Filters</span>
+          <span v-if="hasActiveFilters" class="filter-badge"></span>
+        </button>
 
-      <!-- Sort options -->
-      <select v-model="sortOption" class="sort-select">
-        <option value="name-asc">Sort by Name (A-Z)</option>
-        <option value="name-desc">Sort by Name (Z-A)</option>
-        <option value="price-asc">Sort by Price (Low to High)</option>
-        <option value="price-desc">Sort by Price (High to Low)</option>
-      </select>    
+        <select v-model="sortOption" class="sort-select">
+          <option value="name-asc">Sort by Name (A-Z)</option>
+          <option value="name-desc">Sort by Name (Z-A)</option>
+          <option value="price-asc">Sort by Price (Low to High)</option>
+          <option value="price-desc">Sort by Price (High to Low)</option>
+        </select>    
 
-      <div class="basket-icon" @click="toggleBasket">
-        🛒 <!-- Use an appropriate icon here -->
-        <span v-if="basketCount > 0" class="basket-count">{{ basketCount }}</span>
+        <div class="basket-icon" @click="toggleBasket">
+          🛒
+          <span v-if="basketCount > 0" class="basket-count">{{ basketCount }}</span>
+        </div>
       </div>
     </div>
+
+    <FilterSidebar 
+      v-if="isFiltersVisible"
+      :categories="categories"
+      :current-filters="activeFilters"
+      @close="toggleFilters"
+      @apply-filters="applyFilters"
+    />
 
     <div class="products-grid">
       <div v-for="product in sortedProducts" :key="product.id" class="product-item">
@@ -42,17 +59,25 @@
 <script>
 import { mapActions, mapState } from 'vuex';
 import BasketSidebar from './BasketSidebar.vue'; // Import your new sidebar component
+import FilterSidebar from './FilterSidebar.vue';
 
 export default {
   components: {
     BasketSidebar,
+    FilterSidebar,
   },
   data() {
     return {
       searchQuery: '',
-      selectedCategory: '',
       sortOption: 'name-asc', // Default sorting option
       isBasketVisible: false,
+      isFiltersVisible: false,
+      activeFilters: {
+        category: '',
+        minPrice: '',
+        maxPrice: '',
+        rating: ''
+      },
     };
   },
   computed: {
@@ -60,8 +85,12 @@ export default {
     filteredProducts() {
       return this.products.filter(product => {
         const matchesSearch = product.title.toLowerCase().includes(this.searchQuery.toLowerCase());
-        const matchesCategory = this.selectedCategory ? product.category === this.selectedCategory : true;
-        return matchesSearch && matchesCategory;
+        const matchesCategory = !this.activeFilters.category || product.category === this.activeFilters.category;
+        const matchesPrice = (!this.activeFilters.minPrice || product.price >= this.activeFilters.minPrice) &&
+                           (!this.activeFilters.maxPrice || product.price <= this.activeFilters.maxPrice);
+        const matchesRating = !this.activeFilters.rating || product.rating >= this.activeFilters.rating;
+        
+        return matchesSearch && matchesCategory && matchesPrice && matchesRating;
       });
     },
     categories() {
@@ -83,6 +112,12 @@ export default {
     basketCount() {
       return this.basket.reduce((total, item) => total + item.quantity, 0);
     },
+    hasActiveFilters() {
+      return this.activeFilters.category || 
+             this.activeFilters.minPrice || 
+             this.activeFilters.maxPrice || 
+             this.activeFilters.rating;
+    },
   },
   methods: {
     ...mapActions(['fetchProducts', 'addToBasket']),
@@ -92,6 +127,13 @@ export default {
     },
     toggleBasket() {
       this.isBasketVisible = !this.isBasketVisible;
+    },
+    toggleFilters() {
+      this.isFiltersVisible = !this.isFiltersVisible;
+    },
+    applyFilters(filters) {
+      this.activeFilters = { ...filters };
+      this.isFiltersVisible = false;
     },
   },
   mounted() {
@@ -115,62 +157,98 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
-  flex-wrap: wrap; /* Allow wrapping on smaller screens */
+  margin-bottom: 24px;
+  gap: 20px;
+  flex-wrap: wrap;
 }
 
 .search-container {
   display: flex;
-  flex-grow: 1;
-  margin-bottom: 10px;
+  flex: 1;
+  min-width: 280px;
+  gap: 10px;
 }
 
-.search-container input {
-  flex-grow: 1;
-  padding: 10px;
-  border: 1px solid #ccc;
-  border-radius: 5px;
-  margin-right: 10px;
+.search-input {
+  flex: 1;
+  padding: 12px 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  background-color: #f9fafb;
+  transition: all 0.3s ease;
 }
 
-.search-container button {
-  padding: 10px 15px;
-  background-color: #007bff;
-  color: white;
-  border: none;
-  border-radius: 5px;
+.search-input:focus {
+  outline: none;
+  border-color: #2563eb;
+  background-color: #fff;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.controls-container {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.search-button, .filter-button {
+  padding: 12px 20px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background-color: #fff;
+  color: #374151;
+  font-weight: 500;
   cursor: pointer;
-  transition: background-color 0.3s;
+  transition: all 0.3s ease;
 }
 
-.search-container button:hover {
-  background-color: #0056b3;
+.search-button:hover, .filter-button:hover {
+  background-color: #f3f4f6;
+  border-color: #d1d5db;
 }
 
-.category-select,
 .sort-select {
-  padding: 10px;
-  border: 1px solid #ccc;
-  border-radius: 5px;
-  margin-left: 10px;
-  margin-bottom: 10px; /* Spacing on small screens */
+  padding: 12px 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background-color: #fff;
+  color: #374151;
+  font-weight: 500;
+  cursor: pointer;
+  min-width: 200px;
+  transition: all 0.3s ease;
+}
+
+.sort-select:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
 
 .basket-icon {
   position: relative;
   cursor: pointer;
   font-size: 1.5em;
+  padding: 8px;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.basket-icon:hover {
+  background-color: #f3f4f6;
 }
 
 .basket-count {
   position: absolute;
-  top: -5px;
-  right: -10px;
-  background-color: red;
+  top: -8px;
+  right: -8px;
+  background-color: #ef4444;
   color: white;
   border-radius: 50%;
-  padding: 5px;
-  font-size: 0.70rem;
+  padding: 4px 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
 }
 
 /* Product Grid */
@@ -232,25 +310,27 @@ export default {
 @media (max-width: 768px) {
   .filter-section {
     flex-direction: column;
-    align-items: flex-start;
+    align-items: stretch;
   }
 
-  .search-container,
-  .category-select,
-  .sort-select {
+  .controls-container {
     width: 100%;
-    margin-bottom: 10px;
+    justify-content: space-between;
   }
 
-  .category-select,
   .sort-select {
-    margin-left: 0;
+    min-width: 150px;
   }
 }
 
 @media (max-width: 480px) {
-  .products-grid {
-    grid-template-columns: 1fr; /* Single column layout on small screens */
+  .controls-container {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .sort-select {
+    width: 100%;
   }
 }
 </style>
